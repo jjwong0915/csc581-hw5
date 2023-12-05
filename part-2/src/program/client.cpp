@@ -2,6 +2,7 @@
 #include <SFML/System.hpp>
 #include <iostream>
 #include <set>
+#include <string>
 #include <zmq.hpp>
 
 #include "event/event.hpp"
@@ -19,8 +20,8 @@ void send_event(zmq::socket_t& s, const event& e) {
 int main() {
   std::set<sf::Keyboard::Key> pressed_key;
   // load font
-  sf::Font f;
-  f.loadFromFile("./font.ttf");
+  sf::Font font;
+  font.loadFromFile("./font.ttf");
   // setup sockets
   zmq::context_t context;
   zmq::socket_t event_socket(context, ZMQ_REQ);
@@ -28,7 +29,7 @@ int main() {
   zmq::socket_t world_socket(context, ZMQ_REQ);
   world_socket.connect("tcp://127.0.0.1:5556");
   // create window
-  sf::VideoMode mode{800, 600};
+  sf::VideoMode mode{600, 800};
   sf::RenderWindow window(mode, "Homework 5", sf::Style::Close);
   while (window.isOpen()) {
     // handle window close
@@ -76,21 +77,13 @@ int main() {
         platform_shape.setFillColor(sf::Color::Blue);
         window.draw(platform_shape);
       }
-      sf::RectangleShape moving_platform({100, 15});
-      moving_platform.setPosition(world_object.moving_platform.x,
-                                  world_object.moving_platform.y);
-      moving_platform.setFillColor(sf::Color::Blue);
-      window.draw(moving_platform);
-      sf::CircleShape finish_point(5);
-      finish_point.setPosition(world_object.finish_point.x,
-                               world_object.finish_point.y);
-      finish_point.setFillColor(sf::Color::Yellow);
-      window.draw(finish_point);
-      if (world_object.finished) {
-        sf::Text t{" You Win !!!", f, 40};
-        t.setFillColor(sf::Color::Red);
-        window.draw(t);
+      std::string text_content = "Score: " + std::to_string(world_object.score);
+      if (world_object.game_over) {
+        text_content += "\nGame Over";
       }
+      sf::Text text{text_content, font, 40};
+      text.setFillColor(sf::Color::Red);
+      window.draw(text);
       window.display();
     }
   }

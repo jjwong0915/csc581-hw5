@@ -20,27 +20,16 @@ class script_manager {
   static void raise_callback(const v8::FunctionCallbackInfo<v8::Value>& info);
   static void get_time_callback(
       const v8::FunctionCallbackInfo<v8::Value>& info);
-  static void world_time_getter(
-      v8::Local<v8::Name> property,
-      const v8::PropertyCallbackInfo<v8::Value>& info);
-  static void world_finished_getter(
-      v8::Local<v8::Name> property,
-      const v8::PropertyCallbackInfo<v8::Value>& info);
-  static void world_finished_setter(v8::Local<v8::Name> property,
-                                    v8::Local<v8::Value> value,
-                                    const v8::PropertyCallbackInfo<void>& info);
-  static void platform_x_getter(
-      v8::Local<v8::Name> property,
-      const v8::PropertyCallbackInfo<v8::Value>& info);
-  static void platform_x_setter(v8::Local<v8::Name> property,
-                                v8::Local<v8::Value> value,
-                                const v8::PropertyCallbackInfo<void>& info);
+  static void mainc_vy_getter(v8::Local<v8::Name> property,
+                              const v8::PropertyCallbackInfo<v8::Value>& info);
+  static void mainc_vy_setter(v8::Local<v8::Name> property,
+                              v8::Local<v8::Value> value,
+                              const v8::PropertyCallbackInfo<void>& info);
 
  public:
   script_manager(event_manager& em, world& w);
   ~script_manager();
   void run_script(std::filesystem::path path);
-  void call_function(std::string func);
 };
 
 #endif

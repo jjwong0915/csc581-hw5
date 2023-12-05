@@ -1,12 +1,11 @@
 #ifndef WORLD_HPP
 #define WORLD_HPP
 
+#include <deque>
 #include <nlohmann/json.hpp>
-#include <vector>
 
 #include "event/timestamp.hpp"
 #include "world/character.hpp"
-#include "world/finish.hpp"
 #include "world/platform.hpp"
 
 using json = nlohmann::json;
@@ -14,10 +13,9 @@ using json = nlohmann::json;
 struct world {
   timestamp time;
   character main_character;
-  std::vector<platform> platforms;
-  platform moving_platform;
-  finish finish_point;
-  bool finished;
+  std::deque<platform> platforms;
+  int score;
+  bool game_over;
 };
 
 void to_json(json& j, const world& w);

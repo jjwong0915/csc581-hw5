@@ -1,1 +1,0 @@
-world.finished = true;

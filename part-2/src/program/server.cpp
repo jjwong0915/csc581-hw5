@@ -7,6 +7,7 @@
 #include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include <random>
 #include <thread>
 #include <variant>
 #include <zmq.hpp>
@@ -22,16 +23,16 @@ using namespace std::chrono;
 std::mutex global_mtx;
 event_manager global_event;
 world global_world{
-    timeline::get_time(),
-    {100, 300, false, false, 0},
-    {{60, 500}, {260, 400}, {660, 200}, {460, 100}},
-    {460, 300},
-    {505, 90},
-    false,
+    timeline::get_time(), {290, 600, false, false, 0}, {{250, 700}}, 0, false,
 };
 script_manager global_script{global_event, global_world};
 
+// convenience reference for main character
 auto& main_char = global_world.main_character;
+
+// random number generator
+std::random_device rd;
+std::default_random_engine re(rd());
 
 void receive_event() {
   // setup socket
@@ -81,14 +82,10 @@ void handle_character_collision(world& w, const event& e) {
 
 void handle_character_gravity(world& w, const event& e) {
   main_char.velocity_y +=
-      300.0 * std::get<double>(e.param.at("elapsed_seconds"));
+      500.0 * std::get<double>(e.param.at("elapsed_seconds"));
 }
 
-void handle_character_death(world& w, const event& e) {
-  main_char.x = 100;
-  main_char.y = 300;
-  main_char.velocity_y = 0;
-}
+void handle_character_death(world& w, const event& e) { w.game_over = true; }
 
 void handle_key_press(world& w, const event& e) {
   sf::Keyboard::Key key =
@@ -114,14 +111,25 @@ void handle_key_release(world& w, const event& e) {
   }
 }
 
-void handle_game_finish(world& w, const event& e) {
-  // handle the event using script
-  global_script.run_script("./src/script/handle_finish_event.js");
+void handle_special_jump(world& w, const event& e) {
+  // handle special_jump event using script
+  global_script.run_script("./src/script/handle_special_jump.js");
 }
 
-void handle_special_jump(world& w, const event& e) {
-  // special jump allows the character to jump in the air
-  main_char.velocity_y -= 250.0;
+void handle_platform_movement(world& w, const event& e) {
+  for (auto& p : w.platforms) {
+    p.y -= 100.0 * std::get<double>(e.param.at("elapsed_seconds"));
+  }
+  // remove platform go over top
+  while (w.platforms.size() > 0 && w.platforms.front().y < 0) {
+    w.platforms.pop_front();
+  }
+  // add plaform from bottom
+  if (w.platforms.empty() || w.platforms.back().y < 700) {
+    float x = std::uniform_real_distribution<float>(0, 500)(re);
+    w.platforms.push_back({x, 800});
+    w.score += 1;
+  }
 }
 
 int main() {
@@ -134,8 +142,8 @@ int main() {
   global_event.register_handler("character_death", handle_character_death);
   global_event.register_handler("key_press", handle_key_press);
   global_event.register_handler("key_release", handle_key_release);
-  global_event.register_handler("game_finish", handle_game_finish);
   global_event.register_handler("special_jump", handle_special_jump);
+  global_event.register_handler("platform_movement", handle_platform_movement);
   // start receiver and sender
   std::thread event_receiver{receive_event};
   std::thread world_sender{send_world};
@@ -144,11 +152,16 @@ int main() {
   while (true) {
     {
       std::lock_guard<std::mutex> lock(global_mtx);
+      // stop raising and applying events if the game is over
+      if (global_world.game_over) {
+        std::this_thread::yield();
+        continue;
+      }
       // calculate elapsed seconds
       timestamp present = timeline::get_time();
       float elapsed_seconds = (present - previous).count() * 0.000000001f;
       previous = present;
-      // raise movement event
+      // raise character movement event
       float velocity_x = 0.0;
       if (main_char.move_left) {
         velocity_x -= 120.0;
@@ -160,6 +173,9 @@ int main() {
           {"character_movement",
            {{"x", main_char.x + velocity_x * elapsed_seconds},
             {"y", main_char.y + main_char.velocity_y * elapsed_seconds}}});
+      // raise platform movement event
+      global_event.raise_event(
+          {"platform_movement", {{"elapsed_seconds", elapsed_seconds}}});
       // raise collision event
       bool collision = false;
       float collision_level = 0.0;
@@ -179,18 +195,12 @@ int main() {
             {"character_gravity", {{"elapsed_seconds", elapsed_seconds}}});
       }
       // raise death event using script
-      if (main_char.y > 600) {
+      if (main_char.y > 800) {
         global_script.run_script("./src/script/raise_death_event.js");
-      }
-      // raise finish event
-      const auto& f = global_world.finish_point;
-      if (main_char.x + 20 >= f.x && main_char.x <= f.x + 10 &&
-          main_char.y + 20 >= f.y && main_char.y <= f.y + 10) {
-        global_event.raise_event({"game_finish", {}});
       }
       // apply events
       global_event.apply_events(global_world, timeline::get_time());
     }
-    std::this_thread::sleep_for(milliseconds(1));
+    std::this_thread::yield();
   }
 }

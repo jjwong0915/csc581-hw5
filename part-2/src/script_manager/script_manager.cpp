@@ -24,6 +24,7 @@ script_manager::script_manager(event_manager& em, world& w) {
   if (isolate == nullptr) {
     v8::V8::InitializePlatform(platform.get());
     v8::V8::Initialize();
+    world_ = &w;
     // create and enter an isolate
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator = allocator.get();
@@ -42,43 +43,23 @@ script_manager::script_manager(event_manager& em, world& w) {
         v8::Function::New(isolate, script_manager::raise_callback));
     global_context->Global()->Set(
         v8::String::NewFromUtf8(isolate, "event_handler"), event_handler);
-    // connect the world to the global context
-    world_ = &w;
-    v8::Local<v8::Object> world = v8::Object::New(isolate);
-    if (!world
-             ->SetAccessor(isolate->GetCurrentContext(),
-                           v8::String::NewFromUtf8(isolate, "time"),
-                           script_manager::world_time_getter)
-             .FromJust()) {
-      std::cerr << "error while setting `world.time` getter" << std::endl;
-    }
-    if (!world
-             ->SetAccessor(isolate->GetCurrentContext(),
-                           v8::String::NewFromUtf8(isolate, "finished"),
-                           script_manager::world_finished_getter,
-                           script_manager::world_finished_setter)
-             .FromJust()) {
-      std::cerr << "error while setting `world.finished` getter/setter"
-                << std::endl;
-    }
-    v8::Local<v8::Object> moving_platform = v8::Object::New(isolate);
-    if (!moving_platform
-             ->SetAccessor(isolate->GetCurrentContext(),
-                           v8::String::NewFromUtf8(isolate, "x"),
-                           script_manager::platform_x_getter,
-                           script_manager::platform_x_setter)
-             .FromJust()) {
-      std::cerr << "error while setting `moving_platform.x` getter/setter"
-                << std::endl;
-    }
-    world->Set(v8::String::NewFromUtf8(isolate, "moving_platform"),
-               moving_platform);
-    global_context->Global()->Set(v8::String::NewFromUtf8(isolate, "world"),
-                                  world);
     // add get_time function to the global context
     global_context->Global()->Set(
         v8::String::NewFromUtf8(isolate, "get_time"),
         v8::Function::New(isolate, script_manager::get_time_callback));
+    // add world object to the global context
+    v8::Local<v8::Object> world_object = v8::Object::New(isolate);
+    global_context->Global()->Set(v8::String::NewFromUtf8(isolate, "world"),
+                                  world_object);
+    // add main_character object to the world object
+    v8::Local<v8::Object> main_character = v8::Object::New(isolate);
+    main_character
+        ->SetAccessor(isolate->GetCurrentContext(),
+                      v8::String::NewFromUtf8(isolate, "velocity_y"),
+                      mainc_vy_getter, mainc_vy_setter)
+        .ToChecked();
+    world_object->Set(v8::String::NewFromUtf8(isolate, "main_character"),
+                      main_character);
   }
 }
 
@@ -153,32 +134,14 @@ void script_manager::get_time_callback(
       (double)timeline::get_time().time_since_epoch().count());
 }
 
-void script_manager::world_time_getter(
+void script_manager::mainc_vy_getter(
     v8::Local<v8::Name> property,
     const v8::PropertyCallbackInfo<v8::Value>& info) {
-  info.GetReturnValue().Set((double)world_->time.time_since_epoch().count());
+  info.GetReturnValue().Set((double)world_->main_character.velocity_y);
 }
 
-void script_manager::world_finished_getter(
-    v8::Local<v8::Name> property,
-    const v8::PropertyCallbackInfo<v8::Value>& info) {
-  info.GetReturnValue().Set(world_->finished);
-}
-
-void script_manager::world_finished_setter(
+void script_manager::mainc_vy_setter(
     v8::Local<v8::Name> property, v8::Local<v8::Value> value,
     const v8::PropertyCallbackInfo<void>& info) {
-  world_->finished = value->BooleanValue();
-}
-
-void script_manager::platform_x_getter(
-    v8::Local<v8::Name> property,
-    const v8::PropertyCallbackInfo<v8::Value>& info) {
-  info.GetReturnValue().Set(world_->moving_platform.x);
-}
-
-void script_manager::platform_x_setter(
-    v8::Local<v8::Name> property, v8::Local<v8::Value> value,
-    const v8::PropertyCallbackInfo<void>& info) {
-  world_->moving_platform.x = value->NumberValue();
+  world_->main_character.velocity_y = value->NumberValue();
 }
